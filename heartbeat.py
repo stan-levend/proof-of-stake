@@ -1,6 +1,6 @@
 import threading
 import time
-from managers import encode
+from message import encode_message
 
 from message import Message, MessageType
 
@@ -15,13 +15,13 @@ class Heartbeat():
     def perform_heartbeat(self):
         while not self.terminate_flag.is_set():
             time.sleep(1)
-            print(f"Performing heartbeat on {self.node.host}:{self.node.port}")
+            # print(f"Performing heartbeat on {self.node.host}:{self.node.port}")
             connections = self.node.node_data_manager.connections
             if connections:
                 message = Message(self.node.host, self.node.port,
                                   MessageType.heartbeat,
                                   data=self.node.node_data_manager.connections)
-                messageJSONData = encode(message)
+                messageJSONData = encode_message(message)
                 self.node.send_to_nodes(messageJSONData)
 
             try: time.sleep(4)

@@ -1,3 +1,4 @@
+import json
 import threading
 import time
 
@@ -21,6 +22,8 @@ class NodeInputInterface():
                 continue
 
             if cli_input[0] == "c":
+                print("connect")
+
                 try: PORT = int(cli_input[1])
                 except Exception:
                     print("Invalid port: Choose from interval (1024 - 49151)")
@@ -28,7 +31,9 @@ class NodeInputInterface():
                 # threading.Thread(target=self.connect_with_node, args=(HOSTNAME, PORT))
                 self.node.connect_with_node(HOSTNAME, PORT)
 
-            if cli_input[0] == "gt":
+            elif cli_input[0] == "gt":
+                print("generate transaction")
+
                 if len(cli_input) > 2:
                     cli_input.pop(0)
                     data = ' '.join(cli_input)
@@ -37,8 +42,12 @@ class NodeInputInterface():
                     except Exception:
                         print("Invalid value for generating transaction.")
                         continue
-
                 self.node.generate_transaction(data)
+
+            elif cli_input[0] == "t":
+                print("transaction")
+                t = self.node.node_data_manager.transactions
+                print(json.dumps(t, indent=4))
 
             elif cli_input[0] == "p":
                 print(self.node.nodes_outbound)

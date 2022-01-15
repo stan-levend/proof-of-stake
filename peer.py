@@ -3,17 +3,17 @@ import json
 import socket
 import threading
 import time
-from ctypes import string_at
 
 from p2pnetwork.node import Node
 from p2pnetwork.nodeconnection import NodeConnection
+from blockchain import Transaction
 
 from heartbeat import Heartbeat
-from managers import NodeDataManager, decode, encode
-from message import Message, MessageType
+from managers import NodeDataManager
+from message import Message, MessageType, decode_message, encode_message
 from node_interface import NodeInputInterface
 
-HOSTNAME = "127.0.0.1"
+HOST = "127.0.0.1"
 
 T_THRESHOLD = 3
 
@@ -29,7 +29,7 @@ class Peer2PeerNode (Node):
         self.nodes_outbound_mapper = {}
         super(Peer2PeerNode, self).__init__(host, port, id, callback, max_connections)
         print("Peer2PeerNode: Started")
-        self.node_data_manager = NodeDataManager(HOSTNAME, port)
+        self.node_data_manager = NodeDataManager(HOST, port)
         self.connect_neighbors()
 
         self.heartbeat = Heartbeat(self)
@@ -60,7 +60,7 @@ class Peer2PeerNode (Node):
 
     def node_message(self, node, data):
         print("node_message (" + self.id + ") from " + node.id + node.host + str(node.port) + ": " + str(data))
-        message = decode(data)
+        message = decode_message(data)
 
         if message.type == MessageType.heartbeat:
             # print(message.data)
@@ -117,22 +117,41 @@ class Peer2PeerNode (Node):
             self.node_data_manager.connections = connections
 
     def generate_transaction(self, data):
-        transactions = self.node_data_manager.transactions
-        transactions.append({
+        new_transaction = {
             "node_id": self.id,
             "data": data,
             "timestamp": time.time()
-        })
+        }
+        # new_transaction = Transaction(self.id, data)
+
+        transactions = self.node_data_manager.transactions
+        transactions.append(new_transaction)
         self.node_data_manager.transactions = transactions
 
-        if len(transactions)+1 == T_THRESHOLD:
-            #generate block
+        if len(transactions) == T_THRESHOLD:
+            blockchain = self.node_data_manager.blockchain
+            new_block = {
+                "index": blockchain[-1].index + 1,
+                "timestamp": time.time(),
+                "data": transactions,
+                "prev_block_hash": blockchain[-1].hash
+            }
+            new_block_string = json.dumps(new_block)
+            new_block["hash"] = hashlib.sha256(new_block_string.encode('utf-8')).hexdigest()
+
+        thread = threading.Thread(target=self.send_to_nodes, args=(new_transaction))
+        thread.start()
+        thread.join()
+
+        if len(transactions) == T_THRESHOLD:
             pass
         else:
             #save to file and send to all nodes
             transactions_string = json.dumps(transactions)
             hash = hashlib.sha256(transactions_string.encode())
             pass
+
+        # self.send_to_nodes(new_transaction)
 
 
     def send_to_nodes(self, data, exclude=[]):
@@ -290,9 +309,9 @@ class Peer2PeerNode (Node):
 
 if __name__ == "__main__":
     # PORT = random.randint(1024, 49151)
-    try: PORT = int(input(f"{HOSTNAME}, Input port: "))
+    try: PORT = int(input(f"{HOST}, Input port: "))
     except: raise TypeError("Invalid type: Input integer from interval (1024 - 49151)")
     if PORT not in range(1024, 49151+1): raise ValueError("Invalid port: Choose from interval (1024 - 49151)")
-    node = Peer2PeerNode(HOSTNAME, PORT)
+    node = Peer2PeerNode(HOST, PORT)
     time.sleep(0.3)
     node.start()

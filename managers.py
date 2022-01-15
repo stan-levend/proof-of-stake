@@ -1,23 +1,25 @@
+import hashlib
 import json
 import threading
-
-import jsonpickle
-
-from message import EnumEncoder, as_enum
 
 
 class NodeDataManager():
     def __init__(self, hostname, port) -> None:
         self.hostname = hostname
         self.port = port
-        self._connections_lock = threading.Lock()
-        self._transactions_lock = threading.Lock()
-        self._blockchain_lock = threading.Lock()
-        self._connections = self.__get_connections()
-        self._transactions = self.__get_transactions()
-        self._blockchain = self.__get_blockchain()
 
-    def __get_connections(self) -> list:
+        self._connections_lock = threading.Lock()
+        self._connections = self.__load_connections()
+
+        self._transactions_lock = threading.Lock()
+        self._transactions = self.__load_transactions()
+
+        self._blockchain_lock = threading.Lock()
+        self.__load_block()
+        # self._blockchain = self.__load_blockchain()
+
+
+    def __load_connections(self) -> list:
         # with self._connections_lock:
             try:
                 with open(f"connections/{self.hostname}:{self.port}", "r+") as file:
@@ -38,10 +40,9 @@ class NodeDataManager():
             with open(f"connections/{self.hostname}:{self.port}", "w+") as file:
                 for c in connections:
                     file.write(c + "\n")
-                self.__get_connections()
 
 
-    def __get_transactions(self) -> list:
+    def __load_transactions(self) -> list:
         with self._transactions_lock:
             try:
                 with open(f"transactions/{self.hostname}:{self.port}.json", "r+") as json_file:
@@ -56,20 +57,30 @@ class NodeDataManager():
             return self._transactions
 
     @transactions.setter
-    def transactions(self, transactions) -> None:
+    def transactions(self, list_of_t) -> None:
         with self._transactions_lock:
             with open(f"transactions/{self.hostname}:{self.port}.json", "w+") as json_file:
-                json.dump(transactions, json_file)
+                json.dump(list_of_t, json_file)
 
 
-    def __get_blockchain(self) -> list:
+    def __load_block(self):
         with self._blockchain_lock:
+
             try:
                 with open(f"blockchain/{self.hostname}:{self.port}.json", "r+") as json_file:
                     return json.load(json_file)
             except:
                 with open(f"blockchain/{self.hostname}:{self.port}.json", "w+") as json_file:
-                    return []
+                    genesis_block = {
+                        "index" : 0,
+                        "timestamp" : 0,
+                        "data" : None,
+                        "prev_hash" : 0,
+                    }
+                    genesis_block_string = json.dumps(genesis_block)
+                    genesis_block["hash"] = hashlib.sha256(genesis_block_string.encode('utf-8')).hexdigest()
+                    json.dump(genesis_block, json_file)
+                    return [genesis_block]
 
     @property
     def blockchain(self):
@@ -81,12 +92,3 @@ class NodeDataManager():
         with self._blockchain_lock:
             with open(f"blockchain/{self.hostname}:{self.port}.json", "w+") as json_file:
                 json.dump(blocks, json_file)
-
-
-def encode(object) -> str:
-    JSONstring = jsonpickle.encode(object)
-    return json.dumps(JSONstring, cls=EnumEncoder)
-
-def decode(data) -> any:
-    # JSONstring = json.loads(data, object_hook=as_enum)
-    return jsonpickle.loads(data)

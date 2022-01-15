@@ -1,5 +1,6 @@
 import enum
 import json
+import jsonpickle
 
 
 class MessageType(enum.Enum):
@@ -34,3 +35,12 @@ class Message():
         self.port = port
         self.type = type
         self.data = data
+
+
+def encode_message(object) -> str:
+    JSONstring = jsonpickle.encode(object)
+    return json.dumps(JSONstring, cls=EnumEncoder)
+
+def decode_message(data) -> any:
+    # JSONstring = json.loads(data, object_hook=as_enum)
+    return jsonpickle.loads(data)
