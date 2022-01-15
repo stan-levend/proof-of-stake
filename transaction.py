@@ -7,3 +7,10 @@ class Transaction():
         self.timestamp = time.time()
 
 
+class Block():
+    def __init__(self, index, timestamp, data, prev_block_hash, hash) -> None:
+        self.index = index
+        self.timestamp = timestamp
+        self.data = data
+        self.prev_block_hash = prev_block_hash
+        self.hash = hash

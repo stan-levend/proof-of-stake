@@ -29,11 +29,16 @@ class NodeInputInterface():
                 self.node.connect_with_node(HOSTNAME, PORT)
 
             if cli_input[0] == "gt":
-                try: data = cli_input[1]
-                except Exception:
-                    print("Invalid value for generating transaction.")
-                    continue
-                self.node.generage_transaction(data)
+                if len(cli_input) > 2:
+                    cli_input.pop(0)
+                    data = ' '.join(cli_input)
+                else:
+                    try: data = cli_input[1]
+                    except Exception:
+                        print("Invalid value for generating transaction.")
+                        continue
+
+                self.node.generate_transaction(data)
 
             elif cli_input[0] == "p":
                 print(self.node.nodes_outbound)

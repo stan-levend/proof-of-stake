@@ -12,11 +12,13 @@ class NodeDataManager():
         self.port = port
         self._connections_lock = threading.Lock()
         self._transactions_lock = threading.Lock()
+        self._blockchain_lock = threading.Lock()
         self._connections = self.__get_connections()
         self._transactions = self.__get_transactions()
+        self._blockchain = self.__get_blockchain()
 
     def __get_connections(self) -> list:
-        with self._connections_lock:
+        # with self._connections_lock:
             try:
                 with open(f"connections/{self.hostname}:{self.port}", "r+") as file:
                     lines = file.readlines()
@@ -36,12 +38,14 @@ class NodeDataManager():
             with open(f"connections/{self.hostname}:{self.port}", "w+") as file:
                 for c in connections:
                     file.write(c + "\n")
+                self.__get_connections()
+
 
     def __get_transactions(self) -> list:
         with self._transactions_lock:
             try:
                 with open(f"transactions/{self.hostname}:{self.port}.json", "r+") as json_file:
-                    return json.loads(json_file)
+                    return json.load(json_file)
             except:
                 with open(f"transactions/{self.hostname}:{self.port}.json", "w+") as json_file:
                     return []
@@ -54,18 +58,29 @@ class NodeDataManager():
     @transactions.setter
     def transactions(self, transactions) -> None:
         with self._transactions_lock:
-            with open(f"transactions/{self.hostname}:{self.port}.json", "w+") as file:
-                json.dumps(transactions)
+            with open(f"transactions/{self.hostname}:{self.port}.json", "w+") as json_file:
+                json.dump(transactions, json_file)
 
 
-    # @connections.deleter
-    # def connections(self, item):
-    #     with self.lock:
-    #         self._connections.remove(item)
+    def __get_blockchain(self) -> list:
+        with self._blockchain_lock:
+            try:
+                with open(f"blockchain/{self.hostname}:{self.port}.json", "r+") as json_file:
+                    return json.load(json_file)
+            except:
+                with open(f"blockchain/{self.hostname}:{self.port}.json", "w+") as json_file:
+                    return []
 
-    # def append(self, val):
-    #     self.connections = self.connections + [val]
-    #     return self.connections
+    @property
+    def blockchain(self):
+        with self._blockchain_lock:
+            return self._blockchain
+
+    @blockchain.setter
+    def blockchain(self, blocks) -> None:
+        with self._blockchain_lock:
+            with open(f"blockchain/{self.hostname}:{self.port}.json", "w+") as json_file:
+                json.dump(blocks, json_file)
 
 
 def encode(object) -> str:

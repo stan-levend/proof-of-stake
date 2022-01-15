@@ -1,3 +1,5 @@
+import hashlib
+import json
 import socket
 import threading
 import time
@@ -10,7 +12,6 @@ from heartbeat import Heartbeat
 from managers import NodeDataManager, decode, encode
 from message import Message, MessageType
 from node_interface import NodeInputInterface
-from peer import T_THRESHOLD
 
 HOSTNAME = "127.0.0.1"
 
@@ -122,13 +123,15 @@ class Peer2PeerNode (Node):
             "data": data,
             "timestamp": time.time()
         })
+        self.node_data_manager.transactions = transactions
 
         if len(transactions)+1 == T_THRESHOLD:
             #generate block
             pass
         else:
-            self.node_data_manager.transactions = transactions
             #save to file and send to all nodes
+            transactions_string = json.dumps(transactions)
+            hash = hashlib.sha256(transactions_string.encode())
             pass
 
 

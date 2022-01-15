@@ -24,7 +24,7 @@ class Heartbeat():
                 messageJSONData = encode(message)
                 self.node.send_to_nodes(messageJSONData)
 
-            try: time.sleep(9)
+            try: time.sleep(4)
             except: continue
 
     def start(self):
