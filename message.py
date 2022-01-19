@@ -4,10 +4,14 @@ import jsonpickle
 
 
 class MessageType(enum.Enum):
-    message = 1
-    heartbeat = 2
-    transaction = 3
-    block = 4
+    MESSAGE = 1
+    HEARTBEAT = 2
+    TRANSACTION = 3
+    BLOCK = 4
+    QUERY_B = 5
+    SEND_B = 6
+    QUERY_T_B = 7
+    SEND_T_B = 8
 
 
 PUBLIC_ENUMS = {
@@ -30,9 +34,7 @@ def as_enum(d):
 
 
 class Message():
-    def __init__(self, host, port, type: MessageType, data: list) -> None:
-        self.host = host
-        self.port = port
+    def __init__(self, type: MessageType, data) -> None:
         self.type = type
         self.data = data
 

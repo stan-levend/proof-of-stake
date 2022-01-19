@@ -22,18 +22,17 @@ class NodeInputInterface():
                 continue
 
             if cli_input[0] == "c":
-                print("connect")
-
                 try: PORT = int(cli_input[1])
                 except Exception:
                     print("Invalid port: Choose from interval (1024 - 49151)")
                     continue
                 # threading.Thread(target=self.connect_with_node, args=(HOSTNAME, PORT))
-                self.node.connect_with_node(HOSTNAME, PORT)
+                success = self.node.connect_with_node(HOSTNAME, PORT)
+                time.sleep(0.5)
+                if success is not False:
+                    self.node.query_blockchain(HOSTNAME, PORT)
 
-            elif cli_input[0] == "gt":
-                print("generate transaction")
-
+            if cli_input[0] == "gt":
                 if len(cli_input) > 2:
                     cli_input.pop(0)
                     data = ' '.join(cli_input)
@@ -45,13 +44,16 @@ class NodeInputInterface():
                 self.node.generate_transaction(data)
 
             elif cli_input[0] == "t":
-                print("transaction")
                 t = self.node.node_data_manager.transactions
                 print(json.dumps(t, indent=4))
 
             elif cli_input[0] == "p":
                 print(self.node.nodes_outbound)
                 print(*self.node.all_peers_in_network, sep=", ")
+
+            elif cli_input[0] == "b":
+                b = self.node.node_data_manager.blockchain
+                print(json.dumps(b, indent=4))
 
             # "d"  - Disconnect from the network and reset all neighbors of the node (not implemented)
             # elif cli_input[0] == "d":
@@ -62,14 +64,12 @@ class NodeInputInterface():
 
             elif cli_input[0] == "h":
                 print("""
-                    "c <port>" - Connect to a node
-                    "q"  - Exit
-                    "b"  - List blockchain of the node
-                    "t"  - List transactions of the node
-                    "gt <data>" - Generate new transaction with given data
-                    "m"  - Send message
-                    "p"  - List peers in the P2P network
-                """)
+ "c <port>" - Connect to a node
+        "p" - List peers in the P2P network
+        "t" - List transactions of the node
+"gt <data>" - Generate new transaction with given data
+        "b" - List blockchain of the node
+        "q" - Exit""")
             else:
                 print("""Invalid input - press "h" for Help""")
 

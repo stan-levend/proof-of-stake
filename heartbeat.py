@@ -18,9 +18,7 @@ class Heartbeat():
             # print(f"Performing heartbeat on {self.node.host}:{self.node.port}")
             connections = self.node.node_data_manager.connections
             if connections:
-                message = Message(self.node.host, self.node.port,
-                                  MessageType.heartbeat,
-                                  data=self.node.node_data_manager.connections)
+                message = Message(MessageType.HEARTBEAT, data=self.node.node_data_manager.connections)
                 messageJSONData = encode_message(message)
                 self.node.send_to_nodes(messageJSONData)
 

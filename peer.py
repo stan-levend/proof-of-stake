@@ -5,8 +5,6 @@ import threading
 import time
 
 from p2pnetwork.node import Node
-from p2pnetwork.nodeconnection import NodeConnection
-from blockchain import Transaction
 
 from heartbeat import Heartbeat
 from managers import NodeDataManager
@@ -14,21 +12,15 @@ from message import Message, MessageType, decode_message, encode_message
 from node_interface import NodeInputInterface
 
 HOST = "127.0.0.1"
-
 T_THRESHOLD = 3
-
-# class MyOwnNodeConnection (NodeConnection):
-#     # Python class constructor
-#      def __init__(self, main_node, sock, id, host, port):
-#         super(MyOwnNodeConnection, self).__init__(main_node, sock, id, host, port)
 
 
 class Peer2PeerNode (Node):
     def __init__(self, host, port, id=None, callback=None, max_connections=0):
         id = f"{host}:{port}"
-        self.nodes_outbound_mapper = {}
         super(Peer2PeerNode, self).__init__(host, port, id, callback, max_connections)
-        print("Peer2PeerNode: Started")
+        print(f"Node {self.name} started")
+
         self.node_data_manager = NodeDataManager(HOST, port)
         self.connect_neighbors()
 
@@ -38,12 +30,11 @@ class Peer2PeerNode (Node):
         self.input = NodeInputInterface(self)
         self.input.start()
 
+        self.coordinator = None
+
     @property
     def name(self):
         return f"{self.host}:{self.port}"
-
-    def __str__(self):
-        return f'{self.host}:{self.port}'
 
     @property
     def all_peers_in_network(self):
@@ -59,17 +50,15 @@ class Peer2PeerNode (Node):
             self.node_data_manager.connections = connections
 
     def node_message(self, node, data):
-        print("node_message (" + self.id + ") from " + node.id + node.host + str(node.port) + ": " + str(data))
         message = decode_message(data)
 
-        if message.type == MessageType.heartbeat:
-            # print(message.data)
+        if message.type == MessageType.HEARTBEAT:
+            # print(f"node_message received ({self.id}) from {node.host}:{node.port}: data - {str(message.data)}")
             connections = self.node_data_manager.connections
             inactive_connections = []
-            message_sender = f"{message.host}:{message.port}"
+            message_sender = f"{node.host}:{node.port}"
             if message_sender not in connections:
                 connections.append(message_sender)
-                # self.connect_with_node(message.host, int(message.port))
             for c in message.data:
                 if c != self.name and c not in connections:
                     connections.append(c)
@@ -77,38 +66,65 @@ class Peer2PeerNode (Node):
                     result = self.connect_with_node(host, int(port))
                     if result is False:
                         inactive_connections.append(c)
-                    # merge lists but also connect to the nodes
             if inactive_connections:
                 for c in inactive_connections:
                     connections.remove(c)
             self.node_data_manager.connections = connections
 
-        if message.type == MessageType.transaction:
-            print(message.data)
+        if message.type == MessageType.TRANSACTION:
+            print(f"node_message received ({self.id}) from {node.host, node.port}: {str(data)}")
+            transactions = self.node_data_manager.transactions
+            transactions.append(message.data)
+            self.node_data_manager.transactions = transactions
 
-    def inbound_node_disconnected(self, node):
-        print("inbound_node_disconnected: (" + self.id + "): " + node.id)
+            time.sleep(0.03)
+            self.perform_block_creator_logic()
 
-    def outbound_node_disconnected(self, node):
-        print("outbound_node_disconnected: (" + self.id + "): " + node.id)
+        if message.type == MessageType.BLOCK:
+            print(f"node_message received ({self.id}) from {node.host, node.port}: {str(data)}")
+            is_valid = self.validate_block(message.data)
+            if is_valid:
+                blockchain = self.node_data_manager.blockchain
+                blockchain.append(message.data)
+                self.node_data_manager.blockchain = blockchain
+            else:
+                message = Message(MessageType.QUERY_B, None)
+                self.send_to_nodes(encode_message(message)) #TODO do ktorych nodes?
 
-    def node_disconnect_with_outbound_node(self, node):
-        print("node wants to disconnect with oher outbound node: (" + self.id + "): " + node.id)
+        if message.type == MessageType.QUERY_B:
+            data = self.node_data_manager.blockchain
+            message = Message(MessageType.SEND_B, data)
+            self.send_to_node(node, encode_message(message))
 
-    def node_request_to_stop(self):
-        print("node is requested to stop (" + self.id + "): ")
+        if message.type == MessageType.QUERY_B: #TODO
+            self.node_data_manager.blockchain = message.data.get("blockchain", [])
 
-    #  def create_new_connection(self, connection, id, host, port):
-    #     return MyOwnNodeConnection(self, connection, id, host, port)
+        if message.type == MessageType.QUERY_T_B:
+            print(f"MessageType.QUERY_T_B node_message received ({self.id}) from {node.host, node.port}: {str(data)}")
+            # node = next((n for n in self.nodes_outbound if n.host == node.host and n.port == node.port), None)
+            data = {
+                "transactions": self.node_data_manager.transactions,
+                "blockchain": self.node_data_manager.blockchain
+            }
+            # time.sleep(0.3)
+            message = Message(MessageType.SEND_T_B, data)
+            self.send_to_node(node, encode_message(message))
+
+        if message.type == MessageType.SEND_T_B:
+            print(f"MessageType.SEND_T_B node_message received ({self.id}) from {node.id, node.host}: {str(data)}")
+            self.node_data_manager.transactions = message.data.get("transactions", [])
+            self.node_data_manager.blockchain = message.data.get("blockchain", [])
 
     def connect_neighbors(self):
         connections = self.node_data_manager.connections
         inactive_connections = []
         for c in connections:
             host, port = c.split(":")
-            result = self.connect_with_node(host, int(port))
-            if result is False:
+            success = self.connect_with_node(host, int(port))
+            if success is False:
                 inactive_connections.append(c)
+            else:
+                self.query_blockchain(host, int(port)) #TODO not sure but probably right
 
         for c in inactive_connections:
             connections.remove(c)
@@ -122,43 +138,78 @@ class Peer2PeerNode (Node):
             "data": data,
             "timestamp": time.time()
         }
-        # new_transaction = Transaction(self.id, data)
-
         transactions = self.node_data_manager.transactions
         transactions.append(new_transaction)
         self.node_data_manager.transactions = transactions
 
+        transaction_message = Message(MessageType.TRANSACTION, new_transaction)
+        self.send_to_nodes(encode_message(transaction_message))
+
+        time.sleep(0.3)
+        self.perform_block_creator_logic()
+
+
+    def perform_block_creator_logic(self):
+        transactions = self.node_data_manager.transactions
         if len(transactions) == T_THRESHOLD:
-            blockchain = self.node_data_manager.blockchain
-            new_block = {
-                "index": blockchain[-1].index + 1,
-                "timestamp": time.time(),
-                "data": transactions,
-                "prev_block_hash": blockchain[-1].hash
-            }
-            new_block_string = json.dumps(new_block)
-            new_block["hash"] = hashlib.sha256(new_block_string.encode('utf-8')).hexdigest()
+            min_timestamp_transaction = min(transactions, key=lambda t:t["timestamp"])
+            if min_timestamp_transaction.get("node_id") == self.id:
+                new_block = self.generate_new_block()
+                block_message = Message(MessageType.BLOCK, new_block)
+                self.send_to_nodes(encode_message(block_message))
 
-        thread = threading.Thread(target=self.send_to_nodes, args=(new_transaction))
-        thread.start()
-        thread.join()
+                # is_valid = self.validate_block(new_block) #No need to validate just created block
+                blockchain = self.node_data_manager.blockchain
+                blockchain.append(new_block)
+                self.node_data_manager.blockchain = blockchain
+            elif min_timestamp_transaction.get("node_id") not in self.node_data_manager.connections: #TODO
+                pass
 
-        if len(transactions) == T_THRESHOLD:
-            pass
-        else:
-            #save to file and send to all nodes
-            transactions_string = json.dumps(transactions)
-            hash = hashlib.sha256(transactions_string.encode())
-            pass
+            self.node_data_manager.transactions = []
 
-        # self.send_to_nodes(new_transaction)
+
+    def generate_new_block(self):
+        blockchain = self.node_data_manager.blockchain
+        transactions = self.node_data_manager.transactions
+
+        new_block = {
+            "index": blockchain[-1].get("index") + 1,
+            "timestamp": time.time(),
+            "data": transactions,
+            "prev_block_hash": blockchain[-1].get("hash")
+        }
+        new_block_string = json.dumps(new_block)
+        new_block["hash"] = hashlib.sha256(new_block_string.encode('utf-8')).hexdigest()
+        return new_block
+
+    def validate_block(self, block):
+        blockchain = self.node_data_manager.blockchain
+        #Validity of the index
+        if blockchain[-1].get("index") + 1 != block.get("index") :
+            return False
+        #Validity of hash value of the current block with previous hash value of the next block
+        for b1, b2 in zip(blockchain, blockchain[1:]):
+            if b1.get("hash") != b2.get("prev_block_hash"):
+                return False
+        #Validity of hash value of the new block
+        new_block_hash = block.pop("hash")
+        new_block_string = json.dumps(block)
+        if new_block_hash != hashlib.sha256(new_block_string.encode('utf-8')).hexdigest():
+            return False
+
+        return True
+
+    def query_blockchain(self, host, port):
+        node = next((n for n in self.nodes_outbound if n.host == host and n.port == port), None)
+        if node:
+            message = Message(MessageType.QUERY_T_B, data=None)
+            self.send_to_node(node, encode_message(message))
 
 
     def send_to_nodes(self, data, exclude=[]):
         for n in self.nodes_outbound:
             self.send_to_node(n, data)
 
-        # time.sleep(0.5)
         connections = self.node_data_manager.connections
         nodes_outbound_map = [f"{n.host}:{n.port}" for n in self.nodes_outbound]
         inactive_connections = [n for n in connections if n not in nodes_outbound_map]
@@ -169,41 +220,7 @@ class Peer2PeerNode (Node):
             self.node_data_manager.connections = connections
 
 
-        # inactive_connections = []
-        # connections = self.node_data_manager.connections
-        # for c in connections:
-        #     if c in self.nodes_outbound_mapper:
-        #         result = self.send_to_node(self.nodes_outbound_mapper[c], data)
-        #         if result is False:
-        #             inactive_connections.append(c)
-        #             del self.nodes_outbound_mapper[c]
-        #     else: inactive_connections.append(c)
-
-        # for c in inactive_connections:
-        #     connections.remove(c)
-
-        # if inactive_connections:
-        #     self.node_data_manager.connections = connections
-
-        # inactive_connections = []
-        # for n in self.nodes_outbound:
-        #     result = self.send_to_node(n, data)
-        #     if result is False:
-        #         inactive_connections.append(f"{n.host}:{n.port}")
-
-        # connections = [f"{n.host}:{n.port}" for n in self.nodes_outbound]
-        # neighbors = self.node_data_manager.connections
-        # inactive_connections.extend([n for n in neighbors if n not in connections])
-
-        # for c in inactive_connections:
-        #     neighbors.remove(c)
-
-        # if inactive_connections:
-        #     self.node_data_manager.connections = neighbors
-
-
     def send_to_node(self, n, data):
-        #prepisat na mojich neighbors, namapovat na nodeconnections
         if n in self.nodes_outbound:
             try:
                 n.send(data)
@@ -214,6 +231,7 @@ class Peer2PeerNode (Node):
         else:
             print("Node send_to_node: Could not send the data, node is not found!")
             return False
+
 
     def connect_with_node(self, host, port, reconnect=False):
         if host == self.host and port == self.port:
@@ -243,9 +261,10 @@ class Peer2PeerNode (Node):
             thread_client = self.create_new_connection(sock, connected_node_id, host, port)
             thread_client.start()
 
-            self.nodes_outbound.append(thread_client)
-            # self.nodes_outbound_mapper[f"{thread_client.host}:{thread_client.port}"] = thread_client
-            self.outbound_node_connected(thread_client)
+            if thread_client not in self.nodes_outbound:
+                self.nodes_outbound.append(thread_client)
+                self.outbound_node_connected(thread_client)
+
 
         except Exception as e:
             print("TcpServer.connect_with_node: Could not connect with node. (" + str(e) + ")")
@@ -269,9 +288,7 @@ class Peer2PeerNode (Node):
                     thread_client = self.create_new_connection(connection, connected_node_id, client_host, int(client_port))
                     thread_client.start()
 
-                    # self.nodes_inbound.append(thread_client)
                     self.nodes_outbound.append(thread_client)
-                    # self.nodes_outbound_mapper[f"{thread_client.host}:{thread_client.port}"] = thread_client
                     # self.outbound_node_connected(thread_client)
 
                 else:
@@ -305,6 +322,22 @@ class Peer2PeerNode (Node):
         self.sock.settimeout(None)
         self.sock.close()
         print("Node stopped")
+
+    def inbound_node_disconnected(self, node):
+        # print("inbound_node_disconnected: (" + self.id + "): " + node.id)
+        pass
+
+    def outbound_node_disconnected(self, node):
+        # print("outbound_node_disconnected: (" + self.id + "): " + node.id)
+        pass
+
+    def node_disconnect_with_outbound_node(self, node):
+        # print("node wants to disconnect with oher outbound node: (" + self.id + "): " + node.id)
+        pass
+
+    def node_request_to_stop(self):
+        # print("node is requested to stop (" + self.id + "): ")
+        pass
 
 
 if __name__ == "__main__":
