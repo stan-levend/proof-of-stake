@@ -92,7 +92,15 @@ class NodeDataManager():
             return self._blockchain
 
     @blockchain.setter
-    def blockchain(self, blocks) -> None:
+    def blockchain(self, blockchain) -> None:
         with self._blockchain_lock:
             with open(f"blockchain/{self.host}:{self.port}.json", "w+") as json_file:
-                json.dump(blocks, json_file)
+                json.dump(blockchain, json_file)
+
+
+    def blockchain_append(self, element):
+        with self._blockchain_lock:
+            blockchain = self._blockchain
+            blockchain.append(element)
+            with open(f"blockchain/{self.host}:{self.port}.json", "w+") as json_file:
+                json.dump(blockchain, json_file)

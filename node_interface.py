@@ -33,14 +33,10 @@ class NodeInputInterface():
                     self.node.query_blockchain(HOSTNAME, PORT)
 
             if cli_input[0] == "gt":
-                if len(cli_input) > 2:
-                    cli_input.pop(0)
-                    data = ' '.join(cli_input)
-                else:
-                    try: data = cli_input[1]
-                    except Exception:
-                        print("Invalid value for generating transaction.")
-                        continue
+                try: data = cli_input[1]
+                except Exception:
+                    print("Invalid value for generating transaction.")
+                    continue
                 self.node.generate_transaction(data)
 
             elif cli_input[0] == "t":

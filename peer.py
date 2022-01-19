@@ -71,35 +71,31 @@ class Peer2PeerNode (Node):
                     connections.remove(c)
             self.node_data_manager.connections = connections
 
-        if message.type == MessageType.TRANSACTION:
+        elif message.type == MessageType.TRANSACTION:
             print(f"node_message received ({self.id}) from {node.host, node.port}: {str(data)}")
-            transactions = self.node_data_manager.transactions
-            transactions.append(message.data)
-            self.node_data_manager.transactions = transactions
+            self.node_data_manager.transactions_append(message.data)
 
             time.sleep(0.03)
             self.perform_block_creator_logic()
 
-        if message.type == MessageType.BLOCK:
+        elif message.type == MessageType.BLOCK:
             print(f"node_message received ({self.id}) from {node.host, node.port}: {str(data)}")
             is_valid = self.validate_block(message.data)
             if is_valid:
-                blockchain = self.node_data_manager.blockchain
-                blockchain.append(message.data)
-                self.node_data_manager.blockchain = blockchain
+                self.node_data_manager.blockchain_append(message.data)
             else:
                 message = Message(MessageType.QUERY_B, None)
                 self.send_to_nodes(encode_message(message)) #TODO do ktorych nodes?
 
-        if message.type == MessageType.QUERY_B:
+        elif message.type == MessageType.QUERY_B:
             data = self.node_data_manager.blockchain
             message = Message(MessageType.SEND_B, data)
             self.send_to_node(node, encode_message(message))
 
-        if message.type == MessageType.QUERY_B: #TODO
+        elif message.type == MessageType.QUERY_B: #TODO
             self.node_data_manager.blockchain = message.data.get("blockchain", [])
 
-        if message.type == MessageType.QUERY_T_B:
+        elif message.type == MessageType.QUERY_T_B:
             print(f"MessageType.QUERY_T_B node_message received ({self.id}) from {node.host, node.port}: {str(data)}")
             # node = next((n for n in self.nodes_outbound if n.host == node.host and n.port == node.port), None)
             data = {
@@ -110,7 +106,7 @@ class Peer2PeerNode (Node):
             message = Message(MessageType.SEND_T_B, data)
             self.send_to_node(node, encode_message(message))
 
-        if message.type == MessageType.SEND_T_B:
+        elif message.type == MessageType.SEND_T_B:
             print(f"MessageType.SEND_T_B node_message received ({self.id}) from {node.id, node.host}: {str(data)}")
             self.node_data_manager.transactions = message.data.get("transactions", [])
             self.node_data_manager.blockchain = message.data.get("blockchain", [])
@@ -138,9 +134,7 @@ class Peer2PeerNode (Node):
             "data": data,
             "timestamp": time.time()
         }
-        transactions = self.node_data_manager.transactions
-        transactions.append(new_transaction)
-        self.node_data_manager.transactions = transactions
+        self.node_data_manager.transactions_append(new_transaction)
 
         transaction_message = Message(MessageType.TRANSACTION, new_transaction)
         self.send_to_nodes(encode_message(transaction_message))
@@ -158,10 +152,8 @@ class Peer2PeerNode (Node):
                 block_message = Message(MessageType.BLOCK, new_block)
                 self.send_to_nodes(encode_message(block_message))
 
-                # is_valid = self.validate_block(new_block) #No need to validate just created block
-                blockchain = self.node_data_manager.blockchain
-                blockchain.append(new_block)
-                self.node_data_manager.blockchain = blockchain
+                # is_valid = self.validate_block(new_block) #Do we need to validate just created block?
+                self.node_data_manager.blockchain_append(new_block)
             elif min_timestamp_transaction.get("node_id") not in self.node_data_manager.connections: #TODO
                 pass
 
@@ -196,7 +188,7 @@ class Peer2PeerNode (Node):
         new_block_string = json.dumps(block)
         if new_block_hash != hashlib.sha256(new_block_string.encode('utf-8')).hexdigest():
             return False
-
+        block["hash"] = new_block_hash
         return True
 
     def query_blockchain(self, host, port):
