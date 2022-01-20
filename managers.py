@@ -12,12 +12,13 @@ class NodeDataManager():
         self._transactions_lock = threading.Lock()
         self._blockchain_lock = threading.Lock()
 
-        self._blockchain = []
-        self.__load_blocks()
         self._connections = []
         self._transactions = []
+        self.__load_transactions()
+        self._blockchain = []
+        self.__load_blocks()
 
-    def __load_connections(self) -> list:
+    def __load_connections(self):
         try:
             with open(f"connections/{self.host}:{self.port}", "r+") as file:
                 lines = file.readlines()
@@ -39,19 +40,21 @@ class NodeDataManager():
                 for c in connections:
                     file.write(c + "\n")
 
-    def __load_transactions(self) -> list:
+    def __load_transactions(self):
         try:
             with open(f"transactions/{self.host}:{self.port}.json", "r+") as json_file:
                 self._transactions = json.load(json_file)
         except:
             with open(f"transactions/{self.host}:{self.port}.json", "w+") as json_file:
-                json_file.write([] + "\n")
+                json_file.write('[]')
 
     @property
     def transactions(self):
         with self._transactions_lock:
             self.__load_transactions()
-            return self._transactions
+            return sorted(self._transactions, key=lambda t:t['timestamp']) if self._transactions else self._transactions #TODO
+            # return self._transactions
+
 
     @transactions.setter
     def transactions(self, list_of_t) -> None:
@@ -61,7 +64,7 @@ class NodeDataManager():
 
     def transactions_append(self, element):
         with self._transactions_lock:
-            transactions = self._transactions
+            transactions = self.transactions
             transactions.append(element)
             with open(f"transactions/{self.host}:{self.port}.json", "w+") as json_file:
                 json.dump(transactions, json_file)
@@ -98,7 +101,7 @@ class NodeDataManager():
                 json.dump(blockchain, json_file)
 
 
-    def blockchain_append(self, element):
+    def blockchain_append(self, element) -> None:
         with self._blockchain_lock:
             blockchain = self._blockchain
             blockchain.append(element)

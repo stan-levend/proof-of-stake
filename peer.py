@@ -43,7 +43,7 @@ class Peer2PeerNode (Node):
 
     def outbound_node_connected(self, node):
         print("outbound_node_connected (" + self.id + "): " + node.id)
-        print(self.nodes_outbound)
+        # print(self.nodes_outbound)
         connections = self.node_data_manager.connections
         if f"{node.host}:{node.port}" not in connections:
             connections.append(f"{node.host}:{node.port}")
@@ -71,20 +71,26 @@ class Peer2PeerNode (Node):
                     connections.remove(c)
             self.node_data_manager.connections = connections
 
+            ports = [c.split(':')[1] for c in connections]
+            ports.append(self.port)
+            ports = list(map(int, ports))
+            self.coordinator = f"{self.host}:{max(ports)}"
+
         elif message.type == MessageType.TRANSACTION:
-            print(f"node_message received ({self.id}) from {node.host, node.port}: {str(data)}")
+            print(f"node_message received ({self.id}) from {node.host, node.port}: TRANSACTION")
             self.node_data_manager.transactions_append(message.data)
 
             time.sleep(0.03)
             self.perform_block_creator_logic()
 
         elif message.type == MessageType.BLOCK:
-            print(f"node_message received ({self.id}) from {node.host, node.port}: {str(data)}")
+            print(f"node_message received ({self.id}) from {node.host}:{node.port}: BLOCK")
             is_valid = self.validate_block(message.data)
             if is_valid:
                 self.node_data_manager.blockchain_append(message.data)
             else:
                 message = Message(MessageType.QUERY_B, None)
+
                 self.send_to_nodes(encode_message(message)) #TODO do ktorych nodes?
 
         elif message.type == MessageType.QUERY_B:
@@ -92,12 +98,12 @@ class Peer2PeerNode (Node):
             message = Message(MessageType.SEND_B, data)
             self.send_to_node(node, encode_message(message))
 
-        elif message.type == MessageType.QUERY_B: #TODO
+        elif message.type == MessageType.SEND_B:
+            print(f"node_message received ({self.id}) from {node.host}:{node.port}: QUERY FOR BLOCKCHAIN AND TRANSACTIONS")
             self.node_data_manager.blockchain = message.data.get("blockchain", [])
 
         elif message.type == MessageType.QUERY_T_B:
-            print(f"MessageType.QUERY_T_B node_message received ({self.id}) from {node.host, node.port}: {str(data)}")
-            # node = next((n for n in self.nodes_outbound if n.host == node.host and n.port == node.port), None)
+            print(f"node_message received ({self.id}) from {node.host}:{node.port}: QUERY FOR BLOCKCHAIN AND TRANSACTIONS")
             data = {
                 "transactions": self.node_data_manager.transactions,
                 "blockchain": self.node_data_manager.blockchain
@@ -107,7 +113,7 @@ class Peer2PeerNode (Node):
             self.send_to_node(node, encode_message(message))
 
         elif message.type == MessageType.SEND_T_B:
-            print(f"MessageType.SEND_T_B node_message received ({self.id}) from {node.id, node.host}: {str(data)}")
+            print(f"node_message received ({self.id}) from {node.port}:{node.host}: SEND BLOCKCHAIN AND TRANSACTIONS")
             self.node_data_manager.transactions = message.data.get("transactions", [])
             self.node_data_manager.blockchain = message.data.get("blockchain", [])
 
@@ -134,6 +140,7 @@ class Peer2PeerNode (Node):
             "data": data,
             "timestamp": time.time()
         }
+
         self.node_data_manager.transactions_append(new_transaction)
 
         transaction_message = Message(MessageType.TRANSACTION, new_transaction)
@@ -146,16 +153,23 @@ class Peer2PeerNode (Node):
     def perform_block_creator_logic(self):
         transactions = self.node_data_manager.transactions
         if len(transactions) == T_THRESHOLD:
-            min_timestamp_transaction = min(transactions, key=lambda t:t["timestamp"])
-            if min_timestamp_transaction.get("node_id") == self.id:
+            # min_timestamp_transaction = min(transactions, key=lambda t:t["timestamp"])
+            available_transaction_nodes = [t for t in transactions if t.get("node_id") in self.node_data_manager.connections]
+            if available_transaction_nodes:
+                for t in transactions:
+                    if t.get("node_id") == self.id:
+                        new_block = self.generate_new_block()
+                        block_message = Message(MessageType.BLOCK, new_block)
+                        self.send_to_nodes(encode_message(block_message))
+                        self.node_data_manager.blockchain_append(new_block)
+                        break
+                    elif t.get("node_id") in self.node_data_manager.connections: #TODO
+                        break
+            elif self.coordinator == self.name:
                 new_block = self.generate_new_block()
                 block_message = Message(MessageType.BLOCK, new_block)
                 self.send_to_nodes(encode_message(block_message))
-
-                # is_valid = self.validate_block(new_block) #Do we need to validate just created block?
                 self.node_data_manager.blockchain_append(new_block)
-            elif min_timestamp_transaction.get("node_id") not in self.node_data_manager.connections: #TODO
-                pass
 
             self.node_data_manager.transactions = []
 
@@ -250,10 +264,11 @@ class Peer2PeerNode (Node):
                     print("connect_with_node: This node (" + node.id + ") is already connected with us.")
                     return True
 
-            thread_client = self.create_new_connection(sock, connected_node_id, host, port)
-            thread_client.start()
+            ports = [n.port for n in self.nodes_outbound]
+            if port not in ports:
+                thread_client = self.create_new_connection(sock, connected_node_id, host, port)
+                thread_client.start()
 
-            if thread_client not in self.nodes_outbound:
                 self.nodes_outbound.append(thread_client)
                 self.outbound_node_connected(thread_client)
 
@@ -277,11 +292,14 @@ class Peer2PeerNode (Node):
                     connection.send(self.id.encode('utf-8')) # Send my id to the connected node!
 
                     client_host, client_port = connected_node_id.split(":")
-                    thread_client = self.create_new_connection(connection, connected_node_id, client_host, int(client_port))
-                    thread_client.start()
 
-                    self.nodes_outbound.append(thread_client)
-                    # self.outbound_node_connected(thread_client)
+                    ports = [n.port for n in self.nodes_outbound]
+                    if client_port not in ports:
+                        thread_client = self.create_new_connection(connection, connected_node_id, client_host, int(client_port))
+                        thread_client.start()
+
+                        self.nodes_outbound.append(thread_client)
+                        # self.outbound_node_connected(thread_client)
 
                 else:
                     connection.close()

@@ -26,7 +26,6 @@ class NodeInputInterface():
                 except Exception:
                     print("Invalid port: Choose from interval (1024 - 49151)")
                     continue
-                # threading.Thread(target=self.connect_with_node, args=(HOSTNAME, PORT))
                 success = self.node.connect_with_node(HOSTNAME, PORT)
                 time.sleep(0.5)
                 if success is not False:
@@ -37,19 +36,21 @@ class NodeInputInterface():
                 except Exception:
                     print("Invalid value for generating transaction.")
                     continue
+                print("\nGenerating transaction\n")
                 self.node.generate_transaction(data)
 
             elif cli_input[0] == "t":
                 t = self.node.node_data_manager.transactions
-                print(json.dumps(t, indent=4))
+                print("\nList of transactions:\n" + json.dumps(t, indent=4))
 
             elif cli_input[0] == "p":
-                print(self.node.nodes_outbound)
+                # print(self.node.nodes_outbound)
+                print("\nNodes in the P2P network (first node being this node):")
                 print(*self.node.all_peers_in_network, sep=", ")
 
             elif cli_input[0] == "b":
                 b = self.node.node_data_manager.blockchain
-                print(json.dumps(b, indent=4))
+                print("\nBlockchain:\n" + json.dumps(b, indent=4))
 
             # "d"  - Disconnect from the network and reset all neighbors of the node (not implemented)
             # elif cli_input[0] == "d":
@@ -60,12 +61,13 @@ class NodeInputInterface():
 
             elif cli_input[0] == "h":
                 print("""
+List of available commands:
  "c <port>" - Connect to a node
         "p" - List peers in the P2P network
         "t" - List transactions of the node
 "gt <data>" - Generate new transaction with given data
         "b" - List blockchain of the node
-        "q" - Exit""")
+        "q" - Exit\n""")
             else:
                 print("""Invalid input - press "h" for Help""")
 
