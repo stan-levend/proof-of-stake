@@ -152,11 +152,12 @@ class Peer2PeerNode (Node):
 
     def perform_block_creator_logic(self):
         transactions = self.node_data_manager.transactions
-        if len(transactions) == T_THRESHOLD:
+        sorted_transactions = sorted(transactions, key=lambda t:t['timestamp'])
+        if len(sorted_transactions) == T_THRESHOLD:
             # min_timestamp_transaction = min(transactions, key=lambda t:t["timestamp"])
-            available_transaction_nodes = [t for t in transactions if t.get("node_id") in self.node_data_manager.connections]
+            available_transaction_nodes = [t for t in sorted_transactions if t.get("node_id") in self.node_data_manager.connections]
             if available_transaction_nodes:
-                for t in transactions:
+                for t in sorted_transactions:
                     if t.get("node_id") == self.id:
                         new_block = self.generate_new_block()
                         block_message = Message(MessageType.BLOCK, new_block)

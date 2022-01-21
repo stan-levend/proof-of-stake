@@ -52,8 +52,8 @@ class NodeDataManager():
     def transactions(self):
         with self._transactions_lock:
             self.__load_transactions()
-            return sorted(self._transactions, key=lambda t:t['timestamp']) if self._transactions else self._transactions #TODO
-            # return self._transactions
+            # return sorted(self._transactions, key=lambda t:t['timestamp']) if self._transactions else self._transactions #TODO
+            return self._transactions
 
 
     @transactions.setter
