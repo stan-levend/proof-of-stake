@@ -42,7 +42,7 @@ class Peer2PeerNode (Node):
         return [self.name] + connections
 
     def outbound_node_connected(self, node):
-        print("outbound_node_connected (" + self.id + "): " + node.id)
+        # print("outbound_node_connected (" + self.id + "): " + node.id)
         # print(self.nodes_outbound)
         connections = self.node_data_manager.connections
         if f"{node.host}:{node.port}" not in connections:
@@ -192,18 +192,22 @@ class Peer2PeerNode (Node):
     def validate_block(self, block):
         blockchain = self.node_data_manager.blockchain
         #Validity of the index
-        if blockchain[-1].get("index") + 1 != block.get("index") :
-            return False
-        #Validity of hash value of the current block with previous hash value of the next block
-        for b1, b2 in zip(blockchain, blockchain[1:]):
-            if b1.get("hash") != b2.get("prev_block_hash"):
+        try:
+            if blockchain[-1].get("index") + 1 != block.get("index") :
                 return False
-        #Validity of hash value of the new block
-        new_block_hash = block.pop("hash")
-        new_block_string = json.dumps(block)
-        if new_block_hash != hashlib.sha256(new_block_string.encode('utf-8')).hexdigest():
-            return False
-        block["hash"] = new_block_hash
+            #Validity of hash value of the current block with previous hash value of the next block
+            if blockchain[-1].get("hash") != block.get("prev_block_hash"):
+                return False
+            for b1, b2 in zip(blockchain, blockchain[1:]):
+                if b1.get("hash") != b2.get("prev_block_hash"):
+                    return False
+            #Validity of hash value of the new block
+            new_block_hash = block.pop("hash")
+            new_block_string = json.dumps(block)
+            if new_block_hash != hashlib.sha256(new_block_string.encode('utf-8')).hexdigest():
+                return False
+            block["hash"] = new_block_hash
+        except: return False
         return True
 
     def query_blockchain(self, host, port):
