@@ -64,7 +64,7 @@ class NodeDataManager():
 
     def transactions_append(self, element):
         with self._transactions_lock:
-            transactions = self.transactions
+            transactions = self._transactions
             transactions.append(element)
             with open(f"transactions/{self.host}:{self.port}.json", "w+") as json_file:
                 json.dump(transactions, json_file)
