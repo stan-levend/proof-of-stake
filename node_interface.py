@@ -31,7 +31,7 @@ class NodeInputInterface():
                 if success is not False:
                     self.node.query_blockchain(HOSTNAME, PORT)
 
-            if cli_input[0] == "gt":
+            elif cli_input[0] == "gt":
                 try: data = cli_input[1]
                 except Exception:
                     print("Invalid value for generating transaction.")
